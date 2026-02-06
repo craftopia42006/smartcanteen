@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CanteenIQ</title>
+<style>
+body{margin:0;font-family:Segoe UI,Arial;background:#fff1f6;color:#4a2c3a}
+header{background:#f9a8d4;padding:16px;text-align:center;font-size:26px;font-weight:700}
+header span{display:block;font-size:32px}
+.menu{padding:20px}
+.menu-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.menu-item{background:#fff;border-radius:16px;padding:12px;text-align:center;box-shadow:0 6px 16px rgba(0,0,0,.12);position:relative;cursor:pointer}
+.menu-item img{width:100%;height:120px;object-fit:cover;border-radius:12px}
+.price{font-weight:700}
+.badge{position:absolute;top:8px;right:8px;background:#f472b6;color:#fff;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;opacity:0}
+.cart-btn{position:fixed;right:20px;bottom:20px;width:64px;height:64px;border-radius:50%;background:#f472b6;color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;cursor:pointer;z-index:5}
+.fly{position:fixed;width:40px;height:40px;border-radius:50%;z-index:999;animation:fly 0.8s ease forwards}
+@keyframes fly{to{transform:translate(320px,520px) scale(0.1);opacity:0}}
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);align-items:center;justify-content:center;z-index:10}
+.modal-content{background:#fff;border-radius:18px;padding:20px;width:90%;max-width:420px}
+button,select,input{width:100%;padding:10px;margin-top:10px;border-radius:10px;border:1px solid #fbcfe8}
+button{background:#f472b6;color:#fff;border:none;font-weight:600;cursor:pointer}
+.suggest{background:#fce7f3;padding:10px;border-radius:10px;margin-top:10px;font-weight:600}
+.sensors{background:#fff;margin:20px;padding:16px;border-radius:18px;box-shadow:0 6px 16px rgba(0,0,0,.12)}
+.bar{background:#fbcfe8;border-radius:10px;height:12px;overflow:hidden}
+.fill{background:#f472b6;height:100%}
+</style>
+</head>
+<body>
+<header><span>🍱</span>CanteenIQ – Smart Campus Allocation</header>
+
+<section class="menu">
+  <div class="menu-grid" id="menu"></div>
+</section>
+
+<div class="cart-btn" onclick="openCart()">🛒</div>
+
+<div class="modal" id="cartModal">
+  <div class="modal-content" id="cartBox"></div>
+</div>
+
+<section class="sensors" id="sensorBox"></section>
+
+<script>
+// ---------------- DATA ----------------
+const items=[
+  {name:'Egg Puffs',price:20,img:"images/menu/egg-puffs.png"},
+  {name:'Veg Puffs',price:15,img:"images/menu/veg-puffs.png"},
+  {name:'Chicken Roll',price:30,img:"images/menu/chicken-roll.png"},
+  {name:'Coffee',price:15,img:"images/menu/coffee.png"},
+  {name:'Tea',price:10,img:"images/menu/tea.png"},
+  {name:'Lemonade',price:20,img:"images/menu/lemonade.png"}
+];
+
+let cart={};
+let sensors={
+  main:{cap:150,used:80},
+  open:{cap:80,used:35},
+  hall:{cap:60,used:20}
+};
+
+// ---------------- MENU RENDER ----------------
+const menu=document.getElementById('menu');
+items.forEach(i=>{
+  const d=document.createElement('div');
+  d.className='menu-item';
+  d.innerHTML=`<div class="badge" id="b-${i.name}">0</div>
+               <img src="<img src="${i.img}" alt="${i.name}">" >
+               <h4>${i.name}</h4>
+               <div class="price">₹${i.price}</div>`;
+  d.addEventListener('click',e=>addItem(i,e));
+  menu.appendChild(d);
+});
+
+// ---------------- CART LOGIC ----------------
+function addItem(item,e){
+  cart[item.name]=(cart[item.name]||0)+1;
+  const b=document.getElementById('b-'+item.name);
+  if(b){b.style.opacity=1;b.innerText=cart[item.name];}
+
+  const img=e.currentTarget.querySelector('img');
+  if(img){
+    const r=img.getBoundingClientRect();
+    const f=document.createElement('img');
+    f.src=item.img;
+    f.className='fly';
+    f.style.left=r.left+'px';
+    f.style.top=r.top+'px';
+    document.body.appendChild(f);
+    setTimeout(()=>f.remove(),800);
+  }
+}
+
+function bestPlace(p){
+  if(p>6) return 'Takeaway only (large group)';
+  const load={
+    'Main Canteen':sensors.main.used/sensors.main.cap,
+    'Open Cafeteria':sensors.open.used/sensors.open.cap,
+    'Hallway Seating':sensors.hall.used/sensors.hall.cap
+  };
+  return Object.keys(load).sort((a,b)=>load[a]-load[b])[0];
+}
+
+function openCart(){
+  let total=0;
+  let html='<h3>Your Cart</h3>';
+  for(let k in cart){
+    const i=items.find(x=>x.name===k);
+    const cost=i.price*cart[k];
+    total+=cost;
+    html+=`<p>${k} × ${cart[k]} = ₹${cost}</p>`;
+  }
+  html+=`<hr>
+          <strong>Total ₹${total}</strong>
+          <label>Payment Method</label>
+          <select id="payment"><option>Pay at Canteen</option><option>UPI</option></select>
+          <label>People with you</label>
+          <input type="number" min="1" value="1" id="peopleInput">
+          <div class="suggest" id="suggestionBox">Suggested place: —</div>
+          <button onclick="closeCart()">Confirm Takeaway</button>`;
+
+  const box=document.getElementById('cartBox');
+  box.innerHTML=html;
+  document.getElementById('cartModal').style.display='flex';
+
+  const peopleInput=document.getElementById('peopleInput');
+  if(peopleInput){
+    peopleInput.addEventListener('input',updateSuggestion);
+  }
+  updateSuggestion();
+}
+
+function updateSuggestion(){
+  const input=document.getElementById('peopleInput');
+  const box=document.getElementById('suggestionBox');
+  if(!input||!box) return; // guard against null
+  const p=parseInt(input.value,10)||1;
+  box.innerText='Suggested place: '+bestPlace(p);
+}
+
+function closeCart(){
+  document.getElementById('cartModal').style.display='none';
+}
+
+// ---------------- SENSORS ----------------
+function renderSensors(){
+  let html='<h3>Live Crowd Sensors</h3>';
+  for(let k in sensors){
+    const s=sensors[k];
+    const percent=Math.round((s.used/s.cap)*100);
+    html+=`<p>${k.toUpperCase()} ${s.used}/${s.cap} (${percent}%)</p>
+            <div class="bar"><div class="fill" style="width:${percent}%"></div></div>`;
+  }
+  document.getElementById('sensorBox').innerHTML=html;
+}
+
+function updateSensors(){
+  for(let k in sensors){
+    sensors[k].used+=Math.floor(Math.random()*11-5);
+    sensors[k].used=Math.max(0,Math.min(sensors[k].used,sensors[k].cap));
+  }
+  renderSensors();
+  updateSuggestion();
+}
+
+renderSensors();
+setInterval(updateSensors,2500);
+
+// ---------------- BASIC TESTS ----------------
+console.assert(typeof bestPlace(1)==='string','bestPlace should return a string');
+console.assert(items.length===6,'There should be 6 menu items');
+console.assert(sensors.main.cap>0,'Sensor capacity must be positive');
+
+window.onclick=e=>{if(e.target.id==='cartModal')closeCart()}
+</script>
+</body>
+</html>
